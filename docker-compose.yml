@@ -1,0 +1,71 @@
+version: '3.7'
+
+
+
+services:
+    zookeeper:
+      container_name: zookeeper
+      image: confluentinc/cp-zookeeper:latest
+      restart: unless-stopped
+      ports:
+        - 2181:2181
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2181
+        ZOOKEEPER_TICK_TIME: 2000
+    kafka:
+      container_name: kafka
+      image: confluentinc/cp-kafka:latest
+      restart: unless-stopped
+      depends_on:
+        - zookeeper
+      ports:
+        - 9092:9092
+      environment:
+        KAFKA_BROKER_ID: 1
+        KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+        KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        TOPIC_AUTO_CREATE: 1
+    producer:
+        container_name: producer
+        build: 
+          context: ./producer/
+          dockerfile: Dockerfile
+        volumes:
+            - "${PERSISTENT_ROOT}/producer/public:/var/www/html"
+            - "${PERSISTENT_ROOT}/producer/custom.ini:/usr/local/etc/php/conf.d/custom.ini"
+        restart: unless-stopped
+        environment:
+            - ENV
+            - TOPIC
+            - GROUPID
+            - ADDRESS
+        ports:
+            - 80:80
+        links:
+            - kafka
+            - zookeeper
+        depends_on:
+            - kafka
+            - consumer
+    consumer:
+        container_name: consumer
+        build: 
+          context: ./consumer/
+          dockerfile: Dockerfile
+        volumes:
+            - "${PERSISTENT_ROOT}/consumer:/opt/consumer"
+            - "${PERSISTENT_ROOT}/consumer/messages:/messages"
+        restart: unless-stopped
+        environment:
+            - ENV
+            - TOPIC
+            - GROUPID
+            - ADDRESS
+        links:
+            - kafka
+            - zookeeper
+        depends_on:
+            - kafka
